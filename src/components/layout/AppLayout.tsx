@@ -10,10 +10,10 @@ import {
   Brain,
   Trophy,
   Menu,
-  X,
   LogOut,
   Settings,
   Bell,
+  MessageSquare,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -30,6 +30,7 @@ const navItems = [
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/insights", label: "AI Insights", icon: Brain },
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
+  { href: "/settings", label: "Settings", icon: MessageSquare },
 ]
 
 function NavContent({ onClose }: { onClose?: () => void }) {
@@ -142,8 +143,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <Button variant="ghost" size="icon">
               <Bell className="h-5 w-5" />
             </Button>
-            <Button variant="ghost" size="icon">
-              <Settings className="h-5 w-5" />
+            <Button variant="ghost" size="icon" asChild>
+              <Link href="/settings">
+                <Settings className="h-5 w-5" />
+              </Link>
             </Button>
             {user && (
               <Avatar className="h-8 w-8">

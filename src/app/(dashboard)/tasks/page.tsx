@@ -127,6 +127,20 @@ export default function TasksPage() {
             title: "Task completed! 🎉",
             description: `You earned ${task.points_value} points!`,
           })
+          // Notify Slack — fire-and-forget, don't block the UI
+          fetch("/api/slack/notify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "task_completion",
+              taskTitle: task.title,
+              taskPriority: task.priority,
+              pointsEarned: task.points_value,
+              completedBy: user?.full_name || user?.email || "A team member",
+            }),
+          }).catch(() => {
+            // Slack notification failures are non-critical
+          })
         }
       }
     }

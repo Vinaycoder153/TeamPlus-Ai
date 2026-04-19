@@ -28,7 +28,7 @@ export interface IndividualInsightInput {
 export async function generateWeeklyTeamInsight(
   input: WeeklyInsightInput
 ): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
 
   const prompt = `
 You are an AI performance coach for a software development team. Analyze the following weekly team data and provide actionable insights.
@@ -70,7 +70,7 @@ Keep the tone professional, encouraging, and constructive. Format as plain text.
 export async function generateIndividualInsight(
   input: IndividualInsightInput
 ): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
 
   const completedTasks = input.recentTasks.filter((t) => t.status === "done").length
   const totalTasks = input.recentTasks.length

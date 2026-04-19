@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { generateWeeklyTeamInsight } from "@/lib/ai"
 import { calculatePerformanceScore } from "@/lib/scoring"
+import { postSlackMessage, buildWeeklyReportMessage } from "@/lib/slack"
 
 export async function POST() {
   try {
@@ -34,6 +35,7 @@ export async function POST() {
     const { data: tasks } = await supabase
       .from("tasks")
       .select("*")
+      .eq("team_id", profile.team_id || "")
       .gte("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
 
     const members = teamMembers || []
@@ -55,9 +57,11 @@ export async function POST() {
     const topPerformers = memberScores.slice(0, 3).filter((m) => m.score > 50)
     const strugglingMembers = memberScores.slice(-3).filter((m) => m.score < 50)
 
+    const teamName = team?.name || "Your Team"
+
     const content = await generateWeeklyTeamInsight({
       team: {
-        name: team?.name || "Your Team",
+        name: teamName,
         memberCount: members.length,
       },
       metrics: {
@@ -86,9 +90,33 @@ export async function POST() {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    // Push report to Slack if the user has a connected integration with weekly reports enabled
+    const { data: slackIntegration } = await supabase
+      .from("slack_integrations")
+      .select("access_token, slack_channel_id, notify_weekly_report")
+      .eq("user_id", user.id)
+      .single()
+
+    if (
+      slackIntegration?.notify_weekly_report &&
+      slackIntegration.slack_channel_id &&
+      slackIntegration.access_token
+    ) {
+      const messageOptions = buildWeeklyReportMessage({
+        teamName,
+        reportContent: content,
+        channelId: slackIntegration.slack_channel_id,
+      })
+      // Fire-and-forget — don't block the response if Slack is unavailable
+      postSlackMessage(slackIntegration.access_token, messageOptions).catch((err) =>
+        console.error("Failed to send weekly report to Slack:", err)
+      )
+    }
+
     return NextResponse.json({ insight })
   } catch (error) {
     console.error("Weekly insight error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+

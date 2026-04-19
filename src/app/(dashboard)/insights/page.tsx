@@ -43,13 +43,19 @@ export default function InsightsPage() {
 
     const loadInsights = async () => {
       const supabase = createClient()
-      const { data } = await supabase
+      let query = supabase
         .from("ai_insights")
         .select("*")
-        .or(`user_id.eq.${user.id},team_id.eq.${user.team_id || "00000000-0000-0000-0000-000000000000"}`)
         .order("created_at", { ascending: false })
         .limit(20)
 
+      if (user.team_id) {
+        query = query.or(`user_id.eq.${user.id},team_id.eq.${user.team_id}`)
+      } else {
+        query = query.eq("user_id", user.id)
+      }
+
+      const { data } = await query
       if (data) setInsights(data)
       setIsLoading(false)
     }
