@@ -27,11 +27,17 @@ export async function updateSession(request: NextRequest) {
 
   const url = request.nextUrl.clone()
   const isAuthPage = url.pathname.startsWith("/auth")
-  const isDashboard = url.pathname.startsWith("/dashboard") ||
+  const isDashboard =
+    url.pathname.startsWith("/dashboard") ||
     url.pathname.startsWith("/team") ||
     url.pathname.startsWith("/tasks") ||
     url.pathname.startsWith("/insights") ||
-    url.pathname.startsWith("/leaderboard")
+    url.pathname.startsWith("/leaderboard") ||
+    url.pathname.startsWith("/settings")
+
+  // /api/slack/callback is the OAuth redirect — allow it without auth guard
+  // so the session cookie exchange can complete before we check the user
+  const isSlackCallback = url.pathname.startsWith("/api/slack/callback")
 
   if (!user && isDashboard) {
     url.pathname = "/auth/login"
@@ -41,6 +47,11 @@ export async function updateSession(request: NextRequest) {
   if (user && isAuthPage) {
     url.pathname = "/dashboard"
     return NextResponse.redirect(url)
+  }
+
+  // Allow the Slack OAuth callback through without redirect
+  if (isSlackCallback) {
+    return supabaseResponse
   }
 
   return supabaseResponse

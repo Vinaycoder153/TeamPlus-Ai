@@ -201,6 +201,57 @@ export interface Database {
         }
         Relationships: []
       }
+      slack_integrations: {
+        Row: {
+          id: string
+          user_id: string
+          team_id: string | null
+          slack_team_id: string
+          slack_team_name: string | null
+          slack_channel_id: string | null
+          slack_channel_name: string | null
+          access_token: string
+          bot_user_id: string | null
+          scope: string | null
+          notify_task_completion: boolean
+          notify_weekly_report: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          team_id?: string | null
+          slack_team_id: string
+          slack_team_name?: string | null
+          slack_channel_id?: string | null
+          slack_channel_name?: string | null
+          access_token: string
+          bot_user_id?: string | null
+          scope?: string | null
+          notify_task_completion?: boolean
+          notify_weekly_report?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          team_id?: string | null
+          slack_team_id?: string
+          slack_team_name?: string | null
+          slack_channel_id?: string | null
+          slack_channel_name?: string | null
+          access_token?: string
+          bot_user_id?: string | null
+          scope?: string | null
+          notify_task_completion?: boolean
+          notify_weekly_report?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: {
@@ -230,3 +281,4 @@ export type Team = Database["public"]["Tables"]["teams"]["Row"]
 export type Task = Database["public"]["Tables"]["tasks"]["Row"]
 export type PerformanceScore = Database["public"]["Tables"]["performance_scores"]["Row"]
 export type AiInsight = Database["public"]["Tables"]["ai_insights"]["Row"]
+export type SlackIntegration = Database["public"]["Tables"]["slack_integrations"]["Row"]
