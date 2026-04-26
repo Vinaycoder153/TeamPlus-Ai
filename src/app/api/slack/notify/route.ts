@@ -1,20 +1,29 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
+import { checkRateLimit } from "@/lib/rateLimit"
 import {
   postSlackMessage,
   buildTaskCompletionMessage,
   buildProductivityAlertMessage,
 } from "@/lib/slack"
 
-export interface SlackNotifyPayload {
-  type: "task_completion" | "productivity_alert"
-  taskTitle?: string
-  taskPriority?: string
-  pointsEarned?: number
-  completedBy?: string
-  alertMessage?: string
-  memberName?: string
-}
+const notifySchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("task_completion"),
+    taskTitle: z.string().min(1),
+    taskPriority: z.string().optional().default("medium"),
+    pointsEarned: z.number().int().min(0).optional().default(0),
+    completedBy: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("productivity_alert"),
+    memberName: z.string().min(1),
+    alertMessage: z.string().min(1),
+  }),
+])
+
+export type SlackNotifyPayload = z.infer<typeof notifySchema>
 
 /**
  * POST /api/slack/notify
@@ -34,7 +43,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const payload: SlackNotifyPayload = await request.json()
+    // Rate-limit: 30 notifications per minute per user
+    const rl = checkRateLimit(`slack_notify:${user.id}`, { limit: 30, windowSeconds: 60 })
+    if (!rl.allowed) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 })
+    }
+
+    const body = await request.json()
+    const parsed = notifySchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const payload = parsed.data
 
     // Fetch the user's Slack integration
     const { data: integration } = await supabase
@@ -59,27 +83,19 @@ export async function POST(request: NextRequest) {
     let messageOptions
 
     if (payload.type === "task_completion") {
-      if (!payload.taskTitle || !payload.completedBy) {
-        return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-      }
       messageOptions = buildTaskCompletionMessage({
         taskTitle: payload.taskTitle,
-        taskPriority: payload.taskPriority ?? "medium",
-        pointsEarned: payload.pointsEarned ?? 0,
+        taskPriority: payload.taskPriority,
+        pointsEarned: payload.pointsEarned,
         completedBy: payload.completedBy,
         channelId: integration.slack_channel_id,
       })
-    } else if (payload.type === "productivity_alert") {
-      if (!payload.memberName || !payload.alertMessage) {
-        return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-      }
+    } else {
       messageOptions = buildProductivityAlertMessage({
         memberName: payload.memberName,
         alertMessage: payload.alertMessage,
         channelId: integration.slack_channel_id,
       })
-    } else {
-      return NextResponse.json({ error: "Unknown notification type" }, { status: 400 })
     }
 
     const result = await postSlackMessage(integration.access_token, messageOptions)
@@ -95,3 +111,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+

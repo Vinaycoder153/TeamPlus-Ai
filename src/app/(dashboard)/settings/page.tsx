@@ -1,7 +1,16 @@
 "use client"
 
 import React, { Suspense, useEffect, useState } from "react"
-import { MessageSquare, Link2, Link2Off, Loader2, CheckCircle2, Hash } from "lucide-react"
+import {
+  MessageSquare,
+  Link2,
+  Link2Off,
+  Loader2,
+  CheckCircle2,
+  Hash,
+  ChevronDown,
+  RefreshCw,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -23,6 +32,13 @@ const SLACK_ERROR_MESSAGES: Record<string, string> = {
   token_exchange_failed: "Failed to exchange authorization code. Please try again.",
 }
 
+interface SlackChannel {
+  id: string
+  name: string
+  is_private: boolean
+  num_members: number | null
+}
+
 export default function SettingsPage() {
   return (
     <Suspense fallback={<div className="text-muted-foreground text-sm">Loading…</div>}>
@@ -42,6 +58,11 @@ function SettingsContent() {
   const [channelId, setChannelId] = useState("")
   const [channelName, setChannelName] = useState("")
   const [isSavingChannel, setIsSavingChannel] = useState(false)
+
+  // Channel picker state
+  const [channels, setChannels] = useState<SlackChannel[]>([])
+  const [isFetchingChannels, setIsFetchingChannels] = useState(false)
+  const [showChannelPicker, setShowChannelPicker] = useState(false)
 
   // Show feedback based on OAuth redirect params
   useEffect(() => {
@@ -96,6 +117,7 @@ function SettingsContent() {
         setIntegration(null)
         setChannelId("")
         setChannelName("")
+        setChannels([])
         toast({ title: "Slack disconnected", description: "Your Slack workspace has been unlinked." })
       } else {
         throw new Error("Failed to disconnect")
@@ -132,9 +154,40 @@ function SettingsContent() {
             }
           : prev
       )
+      setShowChannelPicker(false)
       toast({ title: "Channel saved!", description: "Notifications will be sent to this channel." })
     }
     setIsSavingChannel(false)
+  }
+
+  const handleFetchChannels = async () => {
+    setIsFetchingChannels(true)
+    setShowChannelPicker(true)
+    try {
+      const res = await fetch("/api/slack/channels")
+      const json = await res.json()
+      if (res.ok) {
+        setChannels(json.channels ?? [])
+      } else {
+        toast({
+          title: "Failed to fetch channels",
+          description: json.error ?? "Check that your bot is invited to the workspace.",
+          variant: "destructive",
+        })
+        setShowChannelPicker(false)
+      }
+    } catch {
+      toast({ title: "Failed to fetch channels", variant: "destructive" })
+      setShowChannelPicker(false)
+    } finally {
+      setIsFetchingChannels(false)
+    }
+  }
+
+  const handleSelectChannel = (channel: SlackChannel) => {
+    setChannelId(channel.id)
+    setChannelName(channel.name)
+    setShowChannelPicker(false)
   }
 
   const handleTogglePreference = async (
@@ -227,9 +280,11 @@ function SettingsContent() {
               <div className="space-y-3">
                 <Label className="text-sm font-medium">Notification Channel</Label>
                 <p className="text-xs text-muted-foreground">
-                  Enter the channel ID (e.g. <code className="bg-muted px-1 rounded">C01234ABCDE</code>) or
-                  a DM user ID. The bot must be invited to the channel first.
+                  Select a channel from your workspace or enter the channel ID manually.
+                  The bot must be invited to the channel first.
                 </p>
+
+                {/* Channel picker */}
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Hash className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -248,12 +303,53 @@ function SettingsContent() {
                   />
                   <Button
                     size="sm"
+                    variant="outline"
+                    onClick={handleFetchChannels}
+                    disabled={isFetchingChannels}
+                    title="Browse channels"
+                  >
+                    {isFetchingChannels ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
                     onClick={handleSaveChannel}
                     disabled={isSavingChannel || !channelId.trim()}
                   >
                     {isSavingChannel ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
                   </Button>
                 </div>
+
+                {/* Inline channel list picker */}
+                {showChannelPicker && channels.length > 0 && (
+                  <div className="rounded-lg border divide-y max-h-48 overflow-y-auto">
+                    {channels.map((ch) => (
+                      <button
+                        key={ch.id}
+                        type="button"
+                        className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                        onClick={() => handleSelectChannel(ch)}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+                          {ch.name}
+                          {ch.is_private && (
+                            <Badge variant="outline" className="text-xs py-0 px-1">
+                              private
+                            </Badge>
+                          )}
+                        </span>
+                        {ch.num_members != null && (
+                          <span className="text-xs text-muted-foreground">{ch.num_members} members</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {integration.slack_channel_id && (
                   <p className="text-xs text-green-600">
                     ✓ Notifications will be sent to{" "}
@@ -301,6 +397,53 @@ function SettingsContent() {
                     />
                   </label>
                 </div>
+              </div>
+
+              {/* Activity sync */}
+              <Separator />
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Activity Sync</Label>
+                <p className="text-xs text-muted-foreground">
+                  Sync Slack channel activity to generate productivity insights on the dashboard.
+                  Requires a configured notification channel.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!integration.slack_channel_id}
+                  onClick={async () => {
+                    if (!integration.slack_channel_id) return
+                    try {
+                      const res = await fetch("/api/slack/activity", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          channelId: integration.slack_channel_id,
+                          channelName: integration.slack_channel_name ?? undefined,
+                          lookbackHours: 24,
+                        }),
+                      })
+                      const json = await res.json()
+                      if (res.ok) {
+                        toast({
+                          title: "Activity synced!",
+                          description: `Detected ${json.metrics?.messageCount ?? 0} messages. Signal: ${json.metrics?.productivitySignal ?? "unknown"}`,
+                        })
+                      } else {
+                        toast({
+                          title: "Sync failed",
+                          description: json.error ?? "Please try again.",
+                          variant: "destructive",
+                        })
+                      }
+                    } catch {
+                      toast({ title: "Sync failed", variant: "destructive" })
+                    }
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4 mr-1.5" />
+                  Sync Now
+                </Button>
               </div>
             </>
           ) : (
