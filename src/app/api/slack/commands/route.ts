@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
 
       const { data: members } = await supabase
         .from("profiles")
-        .select("full_name, email")
+        .select("id, full_name, email")
         .eq("team_id", profile.team_id)
 
       const { data: tasks } = await supabase
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       const alerts: string[] = []
 
       for (const member of members ?? []) {
-        const metrics = calculatePerformanceScore(allTasks, (member as { id?: string }).id ?? "")
+        const metrics = calculatePerformanceScore(allTasks, member.id)
         if (metrics.overallScore < 40 && metrics.tasksCompleted > 0) {
           alerts.push(
             `• *${member.full_name || member.email}* — score ${metrics.overallScore}%, on-time ${metrics.onTimeRate}%`

@@ -278,6 +278,7 @@ export interface Database {
           slack_channel_name: string | null
           access_token: string
           bot_user_id: string | null
+          authed_user_slack_id: string | null
           scope: string | null
           notify_task_completion: boolean
           notify_weekly_report: boolean
@@ -294,6 +295,7 @@ export interface Database {
           slack_channel_name?: string | null
           access_token: string
           bot_user_id?: string | null
+          authed_user_slack_id?: string | null
           scope?: string | null
           notify_task_completion?: boolean
           notify_weekly_report?: boolean
@@ -310,6 +312,7 @@ export interface Database {
           slack_channel_name?: string | null
           access_token?: string
           bot_user_id?: string | null
+          authed_user_slack_id?: string | null
           scope?: string | null
           notify_task_completion?: boolean
           notify_weekly_report?: boolean

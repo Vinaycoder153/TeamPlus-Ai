@@ -80,23 +80,18 @@ export async function POST(request: NextRequest) {
 
     const messages = msgResult.messages ?? []
 
-    // Fetch user's profile to get Slack user ID mapping and team
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("team_id")
-      .eq("id", user.id)
-      .single()
+    // Fetch Slack integration to get the authed user's Slack ID
+    const [{ data: profile }, { data: slackIntegration }] = await Promise.all([
+      supabase.from("profiles").select("team_id").eq("id", user.id).single(),
+      supabase
+        .from("slack_integrations")
+        .select("authed_user_slack_id")
+        .eq("user_id", user.id)
+        .single(),
+    ])
 
-    // Compute activity metrics (uses Supabase user.id as slack_user_id fallback)
-    // In practice, store slack_user_id in the integration or profile
-    const { data: slackIntegration } = await supabase
-      .from("slack_integrations")
-      .select("bot_user_id")
-      .eq("user_id", user.id)
-      .single()
-
-    // Use bot_user_id as proxy for testing; a real app stores the authed_user.id
-    const slackUserId = slackIntegration?.bot_user_id ?? ""
+    // Use the authenticated user's Slack ID to filter their messages
+    const slackUserId = slackIntegration?.authed_user_slack_id ?? ""
     const activityMetrics = computeUserActivityMetrics(messages, slackUserId)
 
     // Fetch recent task metrics to enrich the productivity signal
