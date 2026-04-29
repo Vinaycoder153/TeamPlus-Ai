@@ -3,6 +3,8 @@
  * Uses the Slack Web API directly via fetch to avoid extra dependencies.
  */
 
+import { createHmac } from "crypto"
+
 const SLACK_API_BASE = "https://slack.com/api"
 
 export interface SlackMessageBlock {
@@ -16,6 +18,35 @@ export interface SlackPostMessageOptions {
   channel: string
   text: string
   blocks?: SlackMessageBlock[]
+}
+
+export interface SlackChannel {
+  id: string
+  name: string
+  is_private: boolean
+  is_archived: boolean
+  num_members?: number
+}
+
+export interface SlackMessage {
+  type: string
+  user?: string
+  text?: string
+  ts: string
+}
+
+export type ProductivitySignal =
+  | "high_productivity"
+  | "distraction_risk"
+  | "deep_work"
+  | "low_activity"
+  | "unknown"
+
+export interface ActivityMetrics {
+  messageCount: number
+  peakHour: number | null
+  avgResponseTimeMinutes: number | null
+  productivitySignal: ProductivitySignal
 }
 
 /**
@@ -72,6 +103,149 @@ export async function exchangeSlackOAuthCode(code: string): Promise<{
   })
 
   return response.json()
+}
+
+/**
+ * Fetch the list of public/private channels the bot has access to.
+ */
+export async function listSlackChannels(
+  accessToken: string,
+  types = "public_channel,private_channel"
+): Promise<{ ok: boolean; channels?: SlackChannel[]; error?: string }> {
+  const params = new URLSearchParams({
+    types,
+    exclude_archived: "true",
+    limit: "200",
+  })
+
+  const response = await fetch(`${SLACK_API_BASE}/conversations.list?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+
+  const data = await response.json()
+  return data as { ok: boolean; channels?: SlackChannel[]; error?: string }
+}
+
+/**
+ * Fetch recent messages from a Slack channel.
+ * Returns at most `limit` messages from the last `lookbackHours` hours.
+ */
+export async function fetchChannelMessages(
+  accessToken: string,
+  channelId: string,
+  options: { limit?: number; lookbackHours?: number } = {}
+): Promise<{ ok: boolean; messages?: SlackMessage[]; error?: string }> {
+  const { limit = 200, lookbackHours = 24 } = options
+  const oldest = ((Date.now() - lookbackHours * 60 * 60 * 1000) / 1000).toFixed(0)
+
+  const params = new URLSearchParams({
+    channel: channelId,
+    limit: String(limit),
+    oldest,
+  })
+
+  const response = await fetch(
+    `${SLACK_API_BASE}/conversations.history?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  )
+
+  const data = await response.json()
+  return data as { ok: boolean; messages?: SlackMessage[]; error?: string }
+}
+
+/**
+ * Derive per-user activity metrics from a list of channel messages.
+ */
+export function computeUserActivityMetrics(
+  messages: SlackMessage[],
+  slackUserId: string
+): ActivityMetrics {
+  const userMessages = messages.filter((m) => m.user === slackUserId)
+  const messageCount = userMessages.length
+
+  if (messageCount === 0) {
+    return {
+      messageCount: 0,
+      peakHour: null,
+      avgResponseTimeMinutes: null,
+      productivitySignal: "low_activity",
+    }
+  }
+
+  // Derive peak hour
+  const hourCounts = new Map<number, number>()
+  for (const msg of userMessages) {
+    const hour = new Date(Number(msg.ts) * 1000).getUTCHours()
+    hourCounts.set(hour, (hourCounts.get(hour) ?? 0) + 1)
+  }
+  const peakHour = [...hourCounts.entries()].sort((a, b) => b[1] - a[1])[0][0]
+
+  // Average gap between consecutive user messages (response time proxy)
+  let avgResponseTimeMinutes: number | null = null
+  if (userMessages.length >= 2) {
+    const timestamps = userMessages.map((m) => Number(m.ts)).sort((a, b) => a - b)
+    const gaps: number[] = []
+    for (let i = 1; i < timestamps.length; i++) {
+      gaps.push((timestamps[i] - timestamps[i - 1]) / 60)
+    }
+    avgResponseTimeMinutes = gaps.reduce((s, g) => s + g, 0) / gaps.length
+  }
+
+  return {
+    messageCount,
+    peakHour,
+    avgResponseTimeMinutes,
+    productivitySignal: "unknown", // enriched downstream after merging task metrics
+  }
+}
+
+/**
+ * Map Slack activity + task metrics to a productivity signal.
+ *
+ * Rules:
+ *  - High messages + high task completion → high_productivity
+ *  - High messages + low task completion  → distraction_risk
+ *  - Low messages  + high task completion → deep_work
+ *  - Low messages  + low task completion  → low_activity
+ */
+export function mapProductivitySignal(
+  messageCount: number,
+  taskCompletionRate: number // 0–100
+): ProductivitySignal {
+  const highActivity = messageCount >= 10
+  const highCompletion = taskCompletionRate >= 60
+
+  if (highActivity && highCompletion) return "high_productivity"
+  if (highActivity && !highCompletion) return "distraction_risk"
+  if (!highActivity && highCompletion) return "deep_work"
+  if (messageCount === 0) return "low_activity"
+  return "low_activity"
+}
+
+/**
+ * Verify a Slack request signature.
+ * See: https://api.slack.com/authentication/verifying-requests-from-slack
+ */
+export function verifySlackSignature(
+  signingSecret: string,
+  rawBody: string,
+  timestamp: string,
+  signature: string
+): boolean {
+  // Reject requests older than 5 minutes to prevent replay attacks
+  const now = Math.floor(Date.now() / 1000)
+  if (Math.abs(now - Number(timestamp)) > 300) return false
+
+  const baseString = `v0:${timestamp}:${rawBody}`
+  const expected = `v0=${createHmac("sha256", signingSecret).update(baseString).digest("hex")}`
+
+  // Constant-time comparison to prevent timing attacks
+  if (expected.length !== signature.length) return false
+  let mismatch = 0
+  for (let i = 0; i < expected.length; i++) {
+    mismatch |= expected.charCodeAt(i) ^ signature.charCodeAt(i)
+  }
+  return mismatch === 0
 }
 
 /**
@@ -165,3 +339,17 @@ export function buildProductivityAlertMessage(params: {
     ],
   }
 }
+
+/**
+ * Build a Slack response for slash commands (ephemeral by default).
+ */
+export function buildSlashCommandResponse(
+  text: string,
+  responseType: "ephemeral" | "in_channel" = "ephemeral"
+): Record<string, unknown> {
+  return {
+    response_type: responseType,
+    text,
+  }
+}
+

@@ -201,6 +201,72 @@ export interface Database {
         }
         Relationships: []
       }
+      activity_logs: {
+        Row: {
+          id: string
+          user_id: string
+          team_id: string | null
+          slack_user_id: string | null
+          channel_id: string
+          channel_name: string | null
+          activity_date: string
+          message_count: number
+          peak_hour: number | null
+          avg_response_time_minutes: number | null
+          productivity_signal:
+            | "high_productivity"
+            | "distraction_risk"
+            | "deep_work"
+            | "low_activity"
+            | "unknown"
+          raw_metadata: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          team_id?: string | null
+          slack_user_id?: string | null
+          channel_id: string
+          channel_name?: string | null
+          activity_date?: string
+          message_count?: number
+          peak_hour?: number | null
+          avg_response_time_minutes?: number | null
+          productivity_signal?:
+            | "high_productivity"
+            | "distraction_risk"
+            | "deep_work"
+            | "low_activity"
+            | "unknown"
+          raw_metadata?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          team_id?: string | null
+          slack_user_id?: string | null
+          channel_id?: string
+          channel_name?: string | null
+          activity_date?: string
+          message_count?: number
+          peak_hour?: number | null
+          avg_response_time_minutes?: number | null
+          productivity_signal?:
+            | "high_productivity"
+            | "distraction_risk"
+            | "deep_work"
+            | "low_activity"
+            | "unknown"
+          raw_metadata?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       slack_integrations: {
         Row: {
           id: string
@@ -212,6 +278,7 @@ export interface Database {
           slack_channel_name: string | null
           access_token: string
           bot_user_id: string | null
+          authed_user_slack_id: string | null
           scope: string | null
           notify_task_completion: boolean
           notify_weekly_report: boolean
@@ -228,6 +295,7 @@ export interface Database {
           slack_channel_name?: string | null
           access_token: string
           bot_user_id?: string | null
+          authed_user_slack_id?: string | null
           scope?: string | null
           notify_task_completion?: boolean
           notify_weekly_report?: boolean
@@ -244,6 +312,7 @@ export interface Database {
           slack_channel_name?: string | null
           access_token?: string
           bot_user_id?: string | null
+          authed_user_slack_id?: string | null
           scope?: string | null
           notify_task_completion?: boolean
           notify_weekly_report?: boolean
@@ -282,3 +351,4 @@ export type Task = Database["public"]["Tables"]["tasks"]["Row"]
 export type PerformanceScore = Database["public"]["Tables"]["performance_scores"]["Row"]
 export type AiInsight = Database["public"]["Tables"]["ai_insights"]["Row"]
 export type SlackIntegration = Database["public"]["Tables"]["slack_integrations"]["Row"]
+export type ActivityLog = Database["public"]["Tables"]["activity_logs"]["Row"]

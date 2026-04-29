@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
           slack_team_name: tokenData.team.name,
           access_token: tokenData.access_token,
           bot_user_id: tokenData.bot_user_id ?? null,
+          authed_user_slack_id: tokenData.authed_user?.id ?? null,
           scope: tokenData.scope ?? null,
           notify_task_completion: true,
           notify_weekly_report: true,

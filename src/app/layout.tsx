@@ -3,6 +3,9 @@ import "./globals.css"
 import { AuthProvider } from "@/components/providers/AuthProvider"
 import { Toaster } from "@/components/ui/toaster"
 
+// All pages require authentication/dynamic data — disable static prerendering
+export const dynamic = "force-dynamic"
+
 export const metadata: Metadata = {
   title: "TeamPulse AI - Team Performance Intelligence",
   description: "AI-powered team performance tracking and insights",

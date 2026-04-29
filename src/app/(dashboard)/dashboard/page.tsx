@@ -14,11 +14,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAppStore } from "@/store/useAppStore"
 import { createClient } from "@/lib/supabase/client"
 import { calculatePerformanceScore } from "@/lib/scoring"
 import { getPointsToNextLevel, getLevelTitle } from "@/lib/gamification"
+import { SlackInsightsPanel } from "@/components/SlackInsightsPanel"
 import type { Task } from "@/types/database"
 
 export default function DashboardPage() {
@@ -245,6 +245,9 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Slack Productivity Insights */}
+      <SlackInsightsPanel />
     </div>
   )
 }
